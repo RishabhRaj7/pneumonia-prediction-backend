@@ -41,6 +41,9 @@ def home():
 
 @app.route("/predict", methods=["POST"])
 def predict():
+    response = jsonify({"message": "Processing file..."})
+    response.headers.add("Access-Control-Allow-Origin", "*")
+    return response
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
