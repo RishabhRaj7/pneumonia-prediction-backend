@@ -6,7 +6,6 @@ import cv2
 import os
 import logging
 from werkzeug.utils import secure_filename
-import gc  # Garbage collector
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -14,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 class FileValidator:
     ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
-    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
     
     @staticmethod
     def allowed_file(filename):
@@ -27,51 +25,22 @@ class FileValidator:
             return False, "No file selected"
         if not FileValidator.allowed_file(file.filename):
             return False, "Invalid file format"
-        # Check file size
-        file.seek(0, os.SEEK_END)
-        size = file.tell()
-        file.seek(0)
-        if size > FileValidator.MAX_FILE_SIZE:
-            return False, "File size too large (max 5MB)"
         return True, "File is valid"
 
 class ImagePreprocessor:
-    TARGET_SIZE = (180, 180)
-    
     @staticmethod
     def preprocess_image(image_path):
-        """Preprocess the image with memory optimization."""
+        """Preprocess the image to match training preprocessing."""
         try:
             logger.debug(f"Processing image: {image_path}")
-            
-            # Read image with OpenCV instead of TensorFlow
-            img = cv2.imread(image_path)
-            if img is None:
-                raise ValueError("Failed to load image")
-            
-            # Convert BGR to RGB
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            
-            # Resize image
-            img = cv2.resize(img, ImagePreprocessor.TARGET_SIZE)
-            
-            # Convert to float32 and normalize
-            img = img.astype(np.float32) / 255.0
-            
-            # Standardize
-            mean = np.mean(img)
-            std = np.std(img)
-            img = (img - mean) / (std + 1e-7)
-            
-            # Add batch dimension
-            img = np.expand_dims(img, axis=0)
-            
-            # Force garbage collection
-            gc.collect()
-            
+            img = tf.io.read_file(image_path)
+            img = tf.image.decode_jpeg(img, channels=3)
+            img = tf.image.per_image_standardization(img)
+            img = tf.image.convert_image_dtype(img, tf.float32)
+            img = tf.image.resize(img, (180, 180))
+            img = np.expand_dims(img.numpy(), axis=0)
             logger.debug("Image preprocessing completed successfully")
             return img
-            
         except Exception as e:
             logger.error(f"Error in image preprocessing: {str(e)}")
             raise
@@ -88,30 +57,15 @@ CORS(app,
 UPLOAD_FOLDER = "app/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Load the model with memory optimization
-def load_model():
-    try:
-        MODEL_PATH = os.path.abspath("model/my_model.h5")
-        logger.info(f"Loading model from: {MODEL_PATH}")
-        
-        # Configure TensorFlow to be memory-efficient
-        gpus = tf.config.experimental.list_physical_devices('GPU')
-        if gpus:
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-        
-        # Load model with memory optimization
-        model = tf.keras.models.load_model(
-            MODEL_PATH,
-            compile=False  # Don't load optimizer state
-        )
-        logger.info("Model loaded successfully")
-        return model
-    except Exception as e:
-        logger.error(f"Error loading model: {str(e)}")
-        return None
-
-model = load_model()
+# Load the trained model
+try:
+    MODEL_PATH = os.path.abspath("model/my_model.h5")
+    logger.info(f"Loading model from: {MODEL_PATH}")
+    model = tf.keras.models.load_model(MODEL_PATH)
+    logger.info("Model loaded successfully")
+except Exception as e:
+    logger.error(f"Error loading model: {str(e)}")
+    model = None
 
 @app.route("/predict", methods=["POST", "OPTIONS"])
 def predict():
@@ -151,15 +105,11 @@ def predict():
             
             # Make prediction
             logger.debug("Making prediction")
-            with tf.device('/CPU:0'):  # Force CPU usage
-                prediction = model.predict(img, batch_size=1)[0]
+            prediction = model.predict(img)[0]
             confidence = float(prediction[0]) * 100
 
             result = "Pneumonia Positive" if prediction[0] > 0.5 else "Normal"
             logger.info(f"Prediction complete: {result}")
-
-            # Force garbage collection
-            gc.collect()
 
             return jsonify({
                 "message": result,
@@ -175,7 +125,6 @@ def predict():
             if os.path.exists(filepath):
                 os.remove(filepath)
                 logger.debug("Removed temporary file")
-            gc.collect()  # Force garbage collection
 
     except Exception as e:
         logger.error(f"Unexpected error in predict route: {str(e)}")
@@ -184,21 +133,12 @@ def predict():
 @app.route("/health")
 def health_check():
     """Simple health check endpoint"""
-    memory_info = ""
-    try:
-        import psutil
-        process = psutil.Process(os.getpid())
-        memory_info = process.memory_info().rss / 1024 / 1024  # Convert to MB
-    except:
-        memory_info = "unavailable"
-        
     return jsonify({
         "status": "healthy",
         "model_loaded": model is not None,
-        "upload_folder": os.path.exists(UPLOAD_FOLDER),
-        "memory_usage_mb": memory_info
+        "upload_folder": os.path.exists(UPLOAD_FOLDER)
     })
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, debug=True)
