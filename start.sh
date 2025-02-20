@@ -1,1 +1,1 @@
-gunicorn app.pneumonia_backend:app 
+gunicorn app.pneumonia_backend:app --chdir app
