@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask_cors import CORS  # Import CORS
 import tensorflow as tf
 import numpy as np
 import cv2
@@ -7,7 +7,9 @@ import os
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-CORS(app)
+
+# Allow all origins (Fix for Render deployment)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 @app.route("/")
 def home():
