@@ -10,21 +10,8 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 # Load the trained model
-MODEL_PATH = "app/model/my_model.h5"
-
-if not os.path.exists(MODEL_PATH):
-    print(f"ERROR: Model file not found at {MODEL_PATH}")
-    raise FileNotFoundError(f"Model file not found at {MODEL_PATH}. Ensure it's uploaded!")
-
-print(f"Loading model from: {os.path.abspath(MODEL_PATH)}")
-
-try:
-    model = tf.keras.models.load_model(MODEL_PATH)
-    print("Model loaded successfully.")
-except Exception as e:
-    print(f"Error loading model: {e}")
-    raise
-
+MODEL_PATH = os.path.abspath("app/model/my_model.h5")
+print(f"🔍 MODEL_PATH: {MODEL_PATH}")
 model = tf.keras.models.load_model(MODEL_PATH)
 
 # Allowed file extensions
