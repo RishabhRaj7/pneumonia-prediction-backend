@@ -10,7 +10,7 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 # Load the trained model
-MODEL_PATH = os.path.abspath("app/model/my_model.h5")
+MODEL_PATH = os.path.abspath("model/my_model.h5")
 print(f"🔍 MODEL_PATH: {MODEL_PATH}")
 model = tf.keras.models.load_model(MODEL_PATH)
 
