@@ -8,42 +8,24 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # Disable GPU usage
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+CORS(app, 
+     resources={r"/*": {
+         "origins": "*",
+         "methods": ["POST", "OPTIONS"],
+         "allow_headers": ["Content-Type"]
+     }})
 
-# Load the trained model
-MODEL_PATH = os.path.abspath("model/my_model.h5")
-print(f"🔍 MODEL_PATH: {MODEL_PATH}")
-model = tf.keras.models.load_model(MODEL_PATH)
+# Rest of your imports and setup code remains the same...
 
-# Allowed file extensions
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
-
-# Ensure the uploads folder exists
-UPLOAD_FOLDER = "app/uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-def allowed_file(filename):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def preprocess_image(image_path):
-    """Preprocess the image to match training preprocessing."""
-    img = tf.io.read_file(image_path)
-    img = tf.image.decode_jpeg(img, channels=3)  # Decode image
-    img = tf.image.per_image_standardization(img)  # Standardization
-    img = tf.image.convert_image_dtype(img, tf.float32)  # Normalize
-    img = tf.image.resize(img, (180, 180))  # Resize to match model input
-    img = np.expand_dims(img.numpy(), axis=0)  # Convert to NumPy and add batch dimension
-    return img
-
-@app.route("/")
-def home():
-    return "Pneumonia Prediction API is Running!"
-
-@app.route("/predict", methods=["POST"])
+@app.route("/predict", methods=["POST", "OPTIONS"])
 def predict():
-    response = jsonify({"message": "Processing file..."})
-    response.headers.add("Access-Control-Allow-Origin", "*")
-    return response
+    if request.method == "OPTIONS":
+        # Handling preflight request
+        response = jsonify({"message": "OK"})
+        response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type")
+        return response
+
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
@@ -66,13 +48,14 @@ def predict():
         # Convert model output to readable result
         result = "Pneumonia Positive" if prediction[0] > 0.5 else "Normal"
 
-        return jsonify({
-            "prediction": result,
+        response = jsonify({
+            "message": result,
             "confidence": f"{confidence:.2f}%"
-        }), 200
+        })
+        return response, 200
     else:
         return jsonify({"error": "Invalid file format"}), 400
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))  # Ensure Render's dynamic port
+    port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=True)
