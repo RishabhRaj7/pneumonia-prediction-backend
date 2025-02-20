@@ -17,7 +17,18 @@ def home():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    return jsonify({"message": "Prediction endpoint reached"}), 200
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No file selected"}), 400
+
+    if file:
+        return jsonify({"message": "Prediction logic goes here"}), 200
+
+    return jsonify({"error": "Something went wrong"}), 500
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))  # Ensure Render's dynamic port
