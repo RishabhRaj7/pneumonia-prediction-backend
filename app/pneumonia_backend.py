@@ -4,6 +4,7 @@ import tensorflow as tf
 import numpy as np
 import cv2
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # Disable GPU usage
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
